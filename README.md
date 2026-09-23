@@ -45,4 +45,18 @@ Otimização de Hiperparâmetros (LightGBM): A arquitetura da floresta de decis�
 
 Avaliação do Resultado: O resultado foi exatamente o esperado. A pontuação melhorou de 3.17086 para 3.07595. A injeção de termodinâmica e cinemática deu ao algoritmo um poder de diferenciação real. No entanto, a melhoria foi linear e não exponencial, confirmando que o modelo ainda sofre de "amnésia sazonal" — ele tenta adivinhar a chuva apenas com a foto do momento, sem saber em que mês do ano está ou qual é a média histórica exata para aquela coordenada geográfica.
 
+## Documentação do Modelo Baseado em Climatologia (Score: 2.47677)
+
+Raciocínio Principal: O modelo anterior atingiu o limite da abordagem puramente espacial por sofrer de "amnésia sazonal". A precipitação não ocorre de forma aleatória ao longo do ano; ela segue padrões anuais estritos. O objetivo desta iteração foi fornecer ao algoritmo uma âncora temporal, ensinando-lhe o que é o "normal" para cada coordenada. Dessa forma, a rede de decisão do estimador concentra o seu poder computacional em prever apenas os desvios (anomalias climáticas) em vez de tentar calcular o volume absoluto de chuva do zero.
+
+Técnica Aplicada e Justificativa:
+
+Extração Temporal e Climatologia (Física Estatística): A variável do mês foi extraída do índice de tempo (dt.month). Em seguida, os dados históricos foram agrupados por latitude, longitude e mês para calcular a média exata de precipitação de cada pixel ao longo das décadas. Essa "memória climática" (tp_clima) foi fundida de volta ao conjunto de dados principal.
+
+Gestão de Capacidade: Para viabilizar a criação dessa matriz histórica densa sem estourar a memória RAM do Kaggle, as variáveis físicas de temperatura e vento foram temporariamente removidas, abrindo espaço para a matriz de anomalias.
+
+Otimização de Hiperparâmetros (LightGBM): Com o modelo focado em resíduos finos (a diferença entre a chuva real e a chuva média esperada), a arquitetura matemática foi expandida. A profundidade das árvores aumentou (max_depth=10, num_leaves=127) e o número de estimadores subiu para 400, permitindo mapear microclimas regionais com maior precisão e uma taxa de aprendizagem controlada (learning_rate=0.05).
+
+Avaliação do Resultado: A estratégia funcionou de forma altamente eficaz, promovendo uma redução drástica do erro quadrático médio para 2.47677. Embora o limite de 2.0 não tenha sido ultrapassado, este salto estatístico demonstra que a modelação matemática da sazonalidade supera a simples adição de variáveis meteorológicas sem contexto temporal. A submissão garante um modelo competitivo, escalável e bem fundamentado para o encerramento do hackathon.
+
 ## 
