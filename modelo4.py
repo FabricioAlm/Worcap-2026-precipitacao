@@ -22,3 +22,81 @@ for dirname, _, filenames in os.walk('/kaggle/input'):
 import kagglehub
 # kagglehub.dataset_download('<owner>/<dataset-slug>')
 
+import os
+import gc
+import numpy as np
+import xarray as xr
+import pandas as pd
+import lightgbm as lgb
+import xgboost as xgb
+
+base_path = '/kaggle/input/competitions/previsao-climatica-de-precipitacao-sobre-a-america-do-sul/'
+
+print("1. A carregar matrizes base...")
+ds_tp = xr.open_dataset(os.path.join(base_path, "treino_tp.nc"))
+ds_alvo = xr.open_dataset(os.path.join(base_path, "treino_tp_alvo.nc"))
+ds_teste = xr.open_dataset(os.path.join(base_path, "teste_features.nc"))
+
+print("2. A estruturar dados espaciais e temporais...")
+df_treino = ds_tp.to_dataframe().reset_index()
+df_treino['tp_alvo'] = ds_alvo.to_dataframe().reset_index()['tp_alvo']
+df_treino['mes'] = df_treino['time'].dt.month
+df_treino = df_treino.dropna(subset=['tp_alvo', 'tp'])
+
+print("3. A calcular Climatologia Histórica (Média Sazonal)...")
+climatologia = df_treino.groupby(['lat', 'lon', 'mes'])['tp_alvo'].mean().reset_index()
+climatologia = climatologia.rename(columns={'tp_alvo': 'tp_clima'})
+df_treino = df_treino.merge(climatologia, on=['lat', 'lon', 'mes'], how='left')
+
+# Libertação agressiva de RAM essencial para comportar dois modelos de elite
+del ds_tp, ds_alvo
+gc.collect()
+
+features = ['tp', 'lat', 'lon', 'mes', 'tp_clima']
+target = 'tp_alvo'
+
+print("4. A treinar Modelo 1: LightGBM (Foco em velocidade de mapeamento)...")
+modelo_lgb = lgb.LGBMRegressor(
+    n_estimators=500, 
+    learning_rate=0.03, 
+    num_leaves=127,
+    max_depth=10,
+    random_state=42,
+    n_jobs=-1
+)
+modelo_lgb.fit(df_treino[features], df_treino[target])
+
+print("5. A treinar Modelo 2: XGBoost (Foco em robustez estrutural)...")
+# tree_method='hist' é obrigatório para não esgotar a RAM com 78 milhões de linhas
+modelo_xgb = xgb.XGBRegressor(
+    n_estimators=300,
+    learning_rate=0.05,
+    max_depth=8,
+    tree_method='hist',
+    random_state=42,
+    n_jobs=-1
+)
+modelo_xgb.fit(df_treino[features], df_treino[target])
+
+print("6. A preparar inferência e a alinhar bases...")
+df_teste = ds_teste.to_dataframe().reset_index()
+df_teste['tp'] = df_teste['tp_ultima_obs'] 
+df_teste['mes'] = df_teste['time'].dt.month
+df_teste = df_teste.merge(climatologia, on=['lat', 'lon', 'mes'], how='left')
+df_teste['tp_clima'] = df_teste['tp_clima'].fillna(0)
+
+print("7. Ensemble: A fundir os cérebros e aplicar clipping físico...")
+prev_lgb = modelo_lgb.predict(df_teste[features])
+prev_xgb = modelo_xgb.predict(df_teste[features])
+
+# A média cancela a variância individual
+previsoes_finais = (prev_lgb + prev_xgb) / 2.0
+
+# O Clipping impede chuvas negativas
+previsoes_finais = np.clip(previsoes_finais, a_min=0, a_max=None)
+
+df_submissao = pd.read_csv(os.path.join(base_path, "sample_submission.csv"))
+df_submissao['tp_mm_day'] = previsoes_finais
+caminho_saida = "/kaggle/working/submissao_ensemble_final.csv"
+df_submissao.to_csv(caminho_saida, index=False)
+print(f"Ficheiro supremo gerado com sucesso em: {caminho_saida}")
