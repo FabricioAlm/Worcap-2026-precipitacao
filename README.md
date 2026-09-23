@@ -59,4 +59,14 @@ Otimização de Hiperparâmetros (LightGBM): Com o modelo focado em resíduos fi
 
 Avaliação do Resultado: A estratégia funcionou de forma altamente eficaz, promovendo uma redução drástica do erro quadrático médio para 2.47677. Embora o limite de 2.0 não tenha sido ultrapassado, este salto estatístico demonstra que a modelação matemática da sazonalidade supera a simples adição de variáveis meteorológicas sem contexto temporal. A submissão garante um modelo competitivo, escalável e bem fundamentado para o encerramento do hackathon.
 
-## 
+## Documentação do Modelo Ensemble com Clipping (Score: 2.46)
+
+Raciocínio Principal: Após modelar a sazonalidade, o passo final para otimizar o erro foi reduzir a variância matemática das previsões e impor limites físicos aos resultados, combinando as forças de duas arquiteturas distintas.
+
+Técnica Aplicada e Justificativa:
+
+Ensemble Learning (Agrupamento): O pipeline foi dividido para treinar simultaneamente um modelo LightGBM (rápido, focado em anomalias maiores com expansão por folhas) e um XGBoost (estruturalmente rígido, com expansão por níveis). A previsão final foi a média exata de ambos, cancelando os vieses individuais de cada algoritmo.
+
+Clipping Físico: Identificou-se que modelos de regressão geram ocasionalmente previsões negativas de chuva devido ao cálculo de resíduos. Aplicou-se a função np.clip() para converter qualquer valor abaixo de zero para zero absoluto, impedindo fugas matemáticas na avaliação do erro quadrático.
+
+Avaliação do Resultado: O modelo registou 2.46, confirmando que o limite estatístico da modelação isolada por pixel foi alcançado. A redução substancial do erro necessitaria de uma evolução para arquiteturas de Deep Learning espacial.
